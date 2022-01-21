@@ -5,7 +5,7 @@ import smtplib
 
 STOCK = "TSLA"
 COMPANY_NAME = "Tesla Inc"
-CHANGE = 1
+CHANGE = 0
 
 ALPHA_VANTAGE_API_KEY = "QJBEJGRF3O7UTNUK"
 ALPHA_VANTAGE_END_POINT = "https://www.alphavantage.co/query"
@@ -28,30 +28,25 @@ alpha_vantage_params = {
 }
 response = requests.get(ALPHA_VANTAGE_END_POINT, params=alpha_vantage_params)
 response.raise_for_status()
-alpha_vantage_data = response.json()
-
-now = dt.datetime.now()
-day = now.day
-if day < 10:
-    day = f"0{day}"
-month = now.month
-if month < 10:
-    month = f"0{month}"
-year = now.year
-
-yesterday = f"{year}-{month}-{day -2}"
-day_before_yesterday = f"{year}-{month}-{day -3}"
-
-yesterday_price = float(alpha_vantage_data["Time Series (Daily)"][yesterday]["4. close"])
-day_before_yesterday_price = float(alpha_vantage_data["Time Series (Daily)"][day_before_yesterday]["4. close"])
+alpha_vantage_data = response.json()["Time Series (Daily)"]
+print(alpha_vantage_data)
+alpha_vantage_data_list = [value for (key, value) in alpha_vantage_data.items()]
+yesterday = alpha_vantage_data_list[0]
+day_before_yesterday = alpha_vantage_data_list[1]
+yesterday_price = float(yesterday["4. close"])
+print(yesterday_price)
+day_before_yesterday_price = float(day_before_yesterday["4. close"])
+print(day_before_yesterday_price)
 price_change = (yesterday_price-day_before_yesterday_price)/day_before_yesterday_price * 100
+print(price_change)
 if price_change > 0:
     sign = "up"
 else:
     sign = "down"
-price_change = round(abs(price_change))
 
-if price_change > CHANGE:
+price_change = round(price_change, 2)
+if abs(price_change) > CHANGE:
+    print("send news")
     # # STEP 2: Use https://newsapi.org
     # Instead of printing ("Get News"), actually get the first 3 news pieces for the COMPANY_NAME.
 
@@ -63,17 +58,19 @@ if price_change > CHANGE:
     response.raise_for_status()
     news = response.json()
 
-    news_data = response.json()
-    articles = news_data["articles"][:3]
-    news_3 = f"TSLA: {sign}{price_change}%\n"
-    for article in articles:
-        news_3 += f"Headline: {article['title']}\n"
-        news_3 += f"Brief: {article['description']}\n"
-    print(news_3)
+    articles = response.json()
+    three_articles = articles["articles"][:3]
+    formatted_articles = f"TSLA: {sign}{price_change}%\n"
+    for article in three_articles:
+        formatted_articles += f"Headline: {article['title']}\n"
+        formatted_articles += f"Brief: {article['description']}\n"
+    print(formatted_articles)
+    # # STEP 3: Use https://www.twilio.com
+    # Send a separate message with the percentage change and each article's title and description to your phone number.
     client = Client(account_sid, auth_token)
     message = client.messages \
         .create(
-            body=f"{news_3}",
+            body=f"{formatted_articles}",
             from_='+16065540848',
             to='+8619808145773'
         )
@@ -84,13 +81,9 @@ if price_change > CHANGE:
         connection.login(user=EMAIL, password=PASSWORD)
         connection.sendmail(from_addr=EMAIL,
                             to_addrs=EMAIL,
-                            msg=f"Subject:STOCK NEWS\n\n{news_3}")
+                            msg=f"Subject:STOCK NEWS\n\n{formatted_articles}")
 else:
     print("change is too small.")
-
-
-# # STEP 3: Use https://www.twilio.com
-# Send a separate message with the percentage change and each article's title and description to your phone number.
 
 
 # Optional: Format the SMS message like this:
